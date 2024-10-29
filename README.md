@@ -4,7 +4,7 @@ Equipe:
 
 Bruno Vilar Goes (@Brunovgoe)
 Guilhermo Fernandes (@Guilafernandes)
-Alexandre Bandeira ()
+Alexandre Bandeira (@alexandrebandeira10)
 
 Sobre:
 
