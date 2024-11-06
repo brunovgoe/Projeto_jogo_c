@@ -1,92 +1,163 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <unistd.h> 
+#include <unistd.h>
+#include <termios.h>
+#include <fcntl.h>
 
-#define DELAY 80000
+#define INITIAL_DELAY 100000 // Velocidade inicial da bola em microsegundos
+
+// Função para limpar a tela
+void clear_screen() {
+    printf("\033[H\033[J");
+}
+
+// Função para configurar o terminal para entrada não bloqueante
+void configure_terminal() {
+    struct termios term;
+    tcgetattr(STDIN_FILENO, &term);
+    term.c_lflag &= ~(ICANON | ECHO); // Desabilita modo canônico e eco
+    tcsetattr(STDIN_FILENO, TCSANOW, &term);
+}
+
+// Função para restaurar as configurações do terminal
+void restore_terminal() {
+    struct termios term;
+    tcgetattr(STDIN_FILENO, &term);
+    term.c_lflag |= (ICANON | ECHO); // Reativa modo canônico e eco
+    tcsetattr(STDIN_FILENO, TCSANOW, &term);
+}
+
+// Função para verificar se uma tecla foi pressionada
+int kbhit() {
+    struct termios oldt, newt;
+    int ch;
+    int oldf;
+
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+    oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+    fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+
+    ch = getchar();
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    fcntl(STDIN_FILENO, F_SETFL, oldf);
+
+    if (ch != EOF) {
+        ungetc(ch, stdin);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Função para capturar a tecla pressionada
+int getch() {
+    int ch;
+    ch = getchar();
+    return ch;
+}
+
+// Função para dormir por um tempo em milissegundos
+void sleep_milliseconds(int milliseconds) {
+    usleep(milliseconds * 1000);
+}
 
 int main() {
-    int max_y = 25; // Defina os valores conforme necessário ou obtenha-os da cli-lib
-    int max_x = 80;
-    int ball_x = 0, ball_y = 2;
-    int direction = 1; // 1 para direita, -1 para esquerda
+    int max_y = 20; // Altura do terminal
+    int max_x = 40; // Largura do terminal
+    int ball_x = max_x - 3; // Inicia a bola na extrema direita
+    int ball_y = 5; // Linha onde a bola está se movendo horizontalmente
+    int basket_x = max_x / 2; // Posição da cesta (fixa)
     int score = 0;
-    int speed = DELAY;
+    int ball_falling = 0; // Flag para indicar se a bola está caindo
     int ch;
+    int delay = INITIAL_DELAY; // Velocidade inicial da bola
 
-    // Inicialização da cli-lib
-    cli_init();
-    cli_noecho();
-    cli_curs_set(0);
-    cli_keypad(1);
-    cli_nodelay(1);
+    // Configurar o terminal para entrada não bloqueante
+    configure_terminal();
 
     // Semente para números aleatórios
     srand(time(NULL));
 
-    // Obter tamanho da janela, se a cli-lib suportar
-    cli_getmaxyx(&max_y, &max_x);
-
-    // Posicionar a bola no topo
-    ball_x = rand() % max_x;
-
     while (1) {
-        cli_clear();
+        clear_screen();
 
-        // Desenhar a tabela (cesta) no centro inferior
-        cli_mvprintw(max_y - 2, max_x / 2, "|_|");
-
-        // Desenhar a bola
-        cli_mvprintw(ball_y, ball_x, "O");
+        // Desenhar a tela
+        for (int y = 0; y < max_y; y++) {
+            for (int x = 0; x < max_x; x++) {
+                // Desenhar a bola maior (3 caracteres de largura)
+                if (y == ball_y && (x == ball_x || x == ball_x - 1 || x == ball_x + 1)) {
+                    putchar('O');
+                } 
+                // Desenhar o aro da cesta (linha horizontal)
+                else if (y == max_y - 2 && x >= basket_x - 2 && x <= basket_x + 2) {
+                    putchar('-');
+                } 
+                // Desenhar as bordas da cesta (linhas verticais)
+                else if ((y > max_y - 2) && (x == basket_x - 2 || x == basket_x + 2)) {
+                    putchar('|');
+                }
+                // Espaço em branco
+                else {
+                    putchar(' ');
+                }
+            }
+            putchar('\n');
+        }
 
         // Mostrar pontuação
-        cli_mvprintw(1, 2, "Pontuação: %d", score);
+        printf("Pontuação: %d\n", score);
 
-        cli_refresh();
-
-        // Controle da bola
-        ball_x += direction;
-        if (ball_x >= max_x - 1 || ball_x <= 0) {
-            direction *= -1;
+        // Verificar se a bola está caindo
+        if (ball_falling) {
+            ball_y++;
+            if (ball_y >= max_y - 1) { // Verificar se a bola chegou ao fundo
+                if (ball_x >= basket_x - 2 && ball_x <= basket_x + 2) {
+                    score++;
+                    // Aumentar a velocidade da bola (diminuir o delay)
+                    delay = (delay > 20000) ? delay - 5000 : 20000; // Limite mínimo para o delay
+                    ball_falling = 0; // Reiniciar a bola
+                    ball_x = max_x - 3;
+                    ball_y = 5;
+                } else {
+                    // Fim de jogo
+                    break;
+                }
+            }
+        } else {
+            // Mover a bola horizontalmente
+            ball_x--;
+            if (ball_x < 2) {
+                ball_x = max_x - 3; // Reinicia na direita
+            }
         }
 
         // Capturar input do usuário
-        ch = cli_getch();
-        if (ch == ' ' || ch == CLI_KEY_DOWN) {
-            // Verificar se a bola está alinhada com a cesta
-            if (ball_y >= max_y - 3 && abs(ball_x - max_x / 2) <= 1) {
-                score++;
-                speed = (speed > 20000) ? speed - 5000 : speed;
-            } else {
-                // Fim de jogo
+        if (kbhit()) {
+            ch = getch();
+            if (ch == ' ') {
+                ball_falling = 1; // Iniciar queda da bola
+            } else if (ch == 'q') {
+                // Sair do jogo
                 break;
             }
-            // Reiniciar posição da bola
-            ball_x = rand() % max_x;
-            ball_y = 2;
-        } else if (ch == 'q') {
-            // Sair do jogo
-            break;
         }
 
-        // Aumentar a posição vertical da bola
-        ball_y++;
-        if (ball_y >= max_y - 2) {
-            ball_y = 2;
-        }
-
-        usleep(speed);
+        sleep_milliseconds(delay / 1000);
     }
 
+    // Restaurar as configurações do terminal
+    restore_terminal();
+
     // Exibir mensagem de fim de jogo
-    cli_clear();
-    cli_mvprintw(max_y / 2, (max_x - 20) / 2, "Fim de jogo! Pontuação: %d", score);
-    cli_mvprintw(max_y / 2 + 1, (max_x - 30) / 2, "Pressione qualquer tecla para sair.");
-    cli_nodelay(0);
-    cli_getch();
-
-    cli_endwin();
-
-    // Aqui você pode adicionar código para salvar a pontuação e atualizar o ranking.
+    clear_screen();
+    printf("Fim de jogo! Pontuação: %d\n", score);
+    printf("Pressione qualquer tecla para sair.\n");
+    getchar(); // Aguarda entrada do usuário para sair
 
     return 0;
+}
