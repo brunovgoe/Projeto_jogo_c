@@ -1,163 +1,168 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <unistd.h>
-#include <termios.h>
-#include <fcntl.h>
+#include "screen.h"  
+#include "keyboard.h"
+#include "timer.h"  
 
-#define INITIAL_DELAY 100000 // Velocidade inicial da bola em microsegundos
+#define INITIAL_DELAY 100 // Velocidade inicial da bola em milissegundos
+#define SCORE_FILE "scores.txt" // Nome do arquivo de pontuações
 
-// Função para limpar a tela
-void clear_screen() {
-    printf("\033[H\033[J");
+// Estrutura para representar a bola
+typedef struct {
+    int x;
+    int y;
+    int largura;
+} Bola;
+
+// Estrutura para representar a cesta
+typedef struct {
+    int x;
+    int largura;
+} Cesta;
+
+// Função para desenhar uma tabela de pontuação estilizada
+void draw_scoreboard(int score) {
+    screenClear();
+    screenGotoxy(1, 1); // Posiciona o cursor no início da tela
+    printf("╔════════════════════════╗\n");
+    printf("║        PLACAR          ║\n");
+    printf("╠════════════════════════╣\n");
+    printf("║  SCORE:       %02d      ║\n", score);
+    printf("╚════════════════════════╝\n");
 }
 
-// Função para configurar o terminal para entrada não bloqueante
-void configure_terminal() {
-    struct termios term;
-    tcgetattr(STDIN_FILENO, &term);
-    term.c_lflag &= ~(ICANON | ECHO); // Desabilita modo canônico e eco
-    tcsetattr(STDIN_FILENO, TCSANOW, &term);
+// Função para salvar a pontuação no arquivo
+void save_score(int score) {
+    FILE *file = fopen(SCORE_FILE, "a");
+    if (file == NULL) {
+        perror("Erro ao abrir o arquivo de pontuação");
+        return;
+    }
+    fprintf(file, "%d\n", score);
+    fclose(file);
 }
 
-// Função para restaurar as configurações do terminal
-void restore_terminal() {
-    struct termios term;
-    tcgetattr(STDIN_FILENO, &term);
-    term.c_lflag |= (ICANON | ECHO); // Reativa modo canônico e eco
-    tcsetattr(STDIN_FILENO, TCSANOW, &term);
-}
-
-// Função para verificar se uma tecla foi pressionada
-int kbhit() {
-    struct termios oldt, newt;
-    int ch;
-    int oldf;
-
-    tcgetattr(STDIN_FILENO, &oldt);
-    newt = oldt;
-    newt.c_lflag &= ~(ICANON | ECHO);
-    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-    oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
-    fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
-
-    ch = getchar();
-
-    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-    fcntl(STDIN_FILENO, F_SETFL, oldf);
-
-    if (ch != EOF) {
-        ungetc(ch, stdin);
-        return 1;
+// Função para ler e exibir as pontuações em ordem decrescente
+void display_leaderboard() {
+    FILE *file = fopen(SCORE_FILE, "r");
+    if (file == NULL) {
+        perror("Erro ao abrir o arquivo de pontuação");
+        return;
     }
 
-    return 0;
-}
+    int *scores = malloc(100 * sizeof(int));
+    int count = 0;
+    while (fscanf(file, "%d", &scores[count]) != EOF && count < 100) {
+        count++;
+    }
+    fclose(file);
 
-// Função para capturar a tecla pressionada
-int getch() {
-    int ch;
-    ch = getchar();
-    return ch;
-}
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = i + 1; j < count; j++) {
+            if (scores[i] < scores[j]) {
+                int temp = scores[i];
+                scores[i] = scores[j];
+                scores[j] = temp;
+            }
+        }
+    }
 
-// Função para dormir por um tempo em milissegundos
-void sleep_milliseconds(int milliseconds) {
-    usleep(milliseconds * 1000);
+    screenGotoxy(1, 5); // Posiciona o cursor abaixo do placar
+    printf("╔════════════════════════╗\n");
+    printf("║     PLACAR DE LÍDERES  ║\n");
+    printf("╠════════════════════════╣\n");
+    for (int i = 0; i < count && i < 10; i++) {
+        printf("║  %2dº:        %02d        ║\n", i + 1, scores[i]);
+    }
+    printf("╚════════════════════════╝\n");
+
+    free(scores);
 }
 
 int main() {
-    int max_y = 20; // Altura do terminal
-    int max_x = 40; // Largura do terminal
-    int ball_x = max_x - 3; // Inicia a bola na extrema direita
-    int ball_y = 5; // Linha onde a bola está se movendo horizontalmente
-    int basket_x = max_x / 2; // Posição da cesta (fixa)
+    Bola bola = {37, 5, 3};
+    Cesta cesta = {20, 5};
+    int max_y = 20;
     int score = 0;
-    int ball_falling = 0; // Flag para indicar se a bola está caindo
+    int ball_falling = 0;
     int ch;
-    int delay = INITIAL_DELAY; // Velocidade inicial da bola
+    int delay = INITIAL_DELAY;
 
-    // Configurar o terminal para entrada não bloqueante
-    configure_terminal();
+    // Inicializa as bibliotecas
+    keyboardInit();
+    screenInit(1); // Inicializa a tela com bordas
+    timerInit(delay);
 
-    // Semente para números aleatórios
     srand(time(NULL));
 
     while (1) {
-        clear_screen();
+        draw_scoreboard(score);
 
-        // Desenhar a tela
         for (int y = 0; y < max_y; y++) {
-            for (int x = 0; x < max_x; x++) {
-                // Desenhar a bola maior (3 caracteres de largura)
-                if (y == ball_y && (x == ball_x || x == ball_x - 1 || x == ball_x + 1)) {
-                    putchar('O');
-                } 
-                // Desenhar o aro da cesta (linha horizontal)
-                else if (y == max_y - 2 && x >= basket_x - 2 && x <= basket_x + 2) {
-                    putchar('-');
-                } 
-                // Desenhar as bordas da cesta (linhas verticais)
-                else if ((y > max_y - 2) && (x == basket_x - 2 || x == basket_x + 2)) {
-                    putchar('|');
-                }
-                // Espaço em branco
-                else {
-                    putchar(' ');
+            for (int x = 0; x < 40; x++) {
+                screenGotoxy(x + 1, y + 6); // Ajusta a posição do cursor para desenhar o jogo
+                if (y == bola.y && (x == bola.x || x == bola.x - 1 || x == bola.x + 1)) {
+                    printf("O");
+                } else if (y == max_y - 2 && x >= cesta.x - 2 && x <= cesta.x + 2) {
+                    printf("-");
+                } else if ((y > max_y - 2) && (x == cesta.x - 2 || x == cesta.x + 2)) {
+                    printf("|");
+                } else {
+                    printf(" ");
                 }
             }
-            putchar('\n');
         }
 
-        // Mostrar pontuação
-        printf("Pontuação: %d\n", score);
+        screenUpdate(); // Atualiza a tela imediatamente
 
-        // Verificar se a bola está caindo
         if (ball_falling) {
-            ball_y++;
-            if (ball_y >= max_y - 1) { // Verificar se a bola chegou ao fundo
-                if (ball_x >= basket_x - 2 && ball_x <= basket_x + 2) {
+            bola.y++;
+            if (bola.y >= max_y - 1) {
+                if (bola.x >= cesta.x - 2 && bola.x <= cesta.x + 2) {
                     score++;
-                    // Aumentar a velocidade da bola (diminuir o delay)
-                    delay = (delay > 20000) ? delay - 5000 : 20000; // Limite mínimo para o delay
-                    ball_falling = 0; // Reiniciar a bola
-                    ball_x = max_x - 3;
-                    ball_y = 5;
+                    delay = (delay > 20) ? delay - 10 : 20;
+                    ball_falling = 0;
+                    bola.x = 37;
+                    bola.y = 5;
+                    timerUpdateTimer(delay);
                 } else {
-                    // Fim de jogo
                     break;
                 }
             }
         } else {
-            // Mover a bola horizontalmente
-            ball_x--;
-            if (ball_x < 2) {
-                ball_x = max_x - 3; // Reinicia na direita
+            bola.x--;
+            if (bola.x < 2) {
+                bola.x = 37;
             }
         }
 
-        // Capturar input do usuário
-        if (kbhit()) {
-            ch = getch();
+        if (keyhit()) {
+            ch = readch();
             if (ch == ' ') {
-                ball_falling = 1; // Iniciar queda da bola
+                ball_falling = 1;
             } else if (ch == 'q') {
-                // Sair do jogo
                 break;
             }
         }
 
-        sleep_milliseconds(delay / 1000);
+        while (!timerTimeOver()) {
+            // Aguarda o término do tempo
+        }
+        timerUpdateTimer(delay);
     }
 
-    // Restaurar as configurações do terminal
-    restore_terminal();
+    screenClear();
+    save_score(score);
+    draw_scoreboard(score);
+    display_leaderboard();
+    printf("Fim de jogo! Pressione qualquer tecla para sair.\n");
+    readch(); // Aguarda entrada do usuário
 
-    // Exibir mensagem de fim de jogo
-    clear_screen();
-    printf("Fim de jogo! Pontuação: %d\n", score);
-    printf("Pressione qualquer tecla para sair.\n");
-    getchar(); // Aguarda entrada do usuário para sair
+    // Finaliza o uso das bibliotecas
+    keyboardDestroy();
+    screenDestroy();
+    timerDestroy();
 
     return 0;
 }
