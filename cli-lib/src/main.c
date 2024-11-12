@@ -27,13 +27,12 @@ typedef struct {
 } ScoreEntry;
 
 void draw_scoreboard(int score) {
-    screenClear();
     screenGotoxy(1, 1); 
-    printf("╔════════════════════════╗\n");
-    printf("║        PLACAR          ║\n");
-    printf("╠════════════════════════╣\n");
-    printf("║  SCORE:       %02d     ║\n", score);
-    printf("╚════════════════════════╝\n");
+    printf(" ╔═══════════════════════╗\n");
+    printf("  ║       SCORE           ║\n");
+    printf("  ╠═══════════════════════╣\n");
+    printf("  ║          %02d           ║\n", score);
+    printf("  ╚═══════════════════════╝\n");
 }
 
 void save_score(const char *name, int score) {
@@ -70,15 +69,53 @@ void display_leaderboard() {
         }
     }
 
-    printf("\n╔════════════════════════╗\n");
-    printf("  ║    PLACAR DE LÍDERES   ║\n");
-    printf("  ╠════════════════════════╣\n");
+    printf("\nPlacar de Líderes:\n");
     for (int i = 0; i < count && i < 10; i++) {
-        printf("║  %2dº: %s - %02d     ║\n", i + 1, scores[i].name, scores[i].score);
+        char displayName[11];
+        strncpy(displayName, scores[i].name, 10);
+        displayName[10] = '\0';
+
+        printf("%2dº: %-10s - %d\n", i + 1, displayName, scores[i].score);
     }
-    printf("╚════════════════════════╝\n");
 
     free(scores);
+}
+
+void draw_court(Bola bola, Cesta cesta, int max_y) {
+    screenSetColor(WHITE, BLACK); // Define a cor padrão para o fundo
+    for (int y = 0; y < max_y; y++) {
+        for (int x = 0; x < 40; x++) {
+            screenGotoxy(x + 1, y + 6);
+            if (y == bola.y && (x == bola.x || x == bola.x - 1 || x == bola.x + 1)) {
+                screenSetColor(BROWN, BLACK);
+                printf("●");
+                screenSetColor(WHITE, BLACK);
+            }
+            else if (y == max_y - 2 && x >= cesta.x - 3 && x <= cesta.x + 3) {
+                printf("═");
+            }
+            else if (y == max_y - 1 && (x == cesta.x - 3 || x == cesta.x + 3)) {
+                printf("║");
+            }
+            else if (y == max_y && x > cesta.x - 3 && x < cesta.x + 3) {
+                if ((x + y) % 2 == 0) {
+                    printf("▒");
+                } else {
+                    printf(" ");
+                }
+            }
+            else if (y == 0 || y == max_y - 1) {
+                printf("═");
+            }
+            else if (x == 0 || x == 39) {
+                printf("║");
+            }
+            else {
+                printf(" ");
+            }
+        }
+    }
+    screenSetColor(WHITE, BLACK); // Reseta a cor no final
 }
 
 int main() {
@@ -92,35 +129,20 @@ int main() {
     int delay = INITIAL_DELAY;
 
     keyboardInit();
-    screenInit(1); 
+    screenInit(0); 
     timerInit(delay);
 
     srand(time(NULL));
 
     while (1) {
-        draw_scoreboard(score); 
-
-        for (int y = 0; y < max_y; y++) {
-            for (int x = 0; x < 40; x++) {
-                screenGotoxy(x + 1, y + 6); 
-                if (y == bola.y && (x == bola.x || x == bola.x - 1 || x == bola.x + 1)) {
-                    printf("O");
-                } else if (y == max_y - 2 && x >= cesta.x - 2 && x <= cesta.x + 2) {
-                    printf("-");
-                } else if ((y > max_y - 2) && (x == cesta.x - 2 || x == cesta.x + 2)) {
-                    printf("|");
-                } else {
-                    printf(" ");
-                }
-            }
-        }
-
+        draw_scoreboard(score);
+        draw_court(bola, cesta, max_y);
         screenUpdate(); 
 
         if (ball_falling) {
             bola.y++;
             if (bola.y >= max_y - 1) {
-                if (bola.x >= cesta.x - 2 && bola.x <= cesta.x + 2) {
+                if (bola.x >= cesta.x - 3 && bola.x <= cesta.x + 3) {
                     score++;
                     delay = (delay > 20) ? delay - 10 : 20;
                     ball_falling = 0;
@@ -147,21 +169,19 @@ int main() {
             }
         }
 
-        while (!timerTimeOver()) {
-        }
+        while (!timerTimeOver()) {}
         timerUpdateTimer(delay);
     }
 
     screenClear();
-
     printf("Sua pontuação: %d\n", score);
-    printf("Digite seu nome: ", NAME_MAX_LENGTH - 1);
+    printf("Digite seu nome (máx %d caracteres): ", NAME_MAX_LENGTH - 1);
     fflush(stdout); 
     fgets(playerName, NAME_MAX_LENGTH, stdin);
     playerName[strcspn(playerName, "\n")] = '\0'; 
 
     save_score(playerName, score);
-    display_leaderboard(); 
+    display_leaderboard();
     printf("\nFim de jogo! Pressione qualquer tecla para sair.\n");
     readch(); 
 
