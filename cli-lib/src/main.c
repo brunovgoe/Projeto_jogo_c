@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "screen.h"  
+#include "screen.h"
 #include "keyboard.h"
-#include "timer.h"  
+#include "timer.h"
 
 #define INITIAL_DELAY 100 
 #define SCORE_FILE "scores.txt" 
@@ -25,6 +25,31 @@ typedef struct {
     char name[NAME_MAX_LENGTH];
     int score;
 } ScoreEntry;
+
+void tela_inicial() {
+    screenClear();
+    screenSetColor(YELLOW, BLACK); 
+
+    
+    screenGotoxy(5, 2);
+    printf("\n0 0 0   0   0000  0   0  00000  00000    0000   OOO   0   0  0   0  00000\n");
+    printf("0   0  0 0  0     0  0   0        0     0      O   O  0   0  00  0    0  \n");
+    printf("0000   000  000   000    0000     0     0      O   O  0   0  0 0 0    0  \n");
+    printf("0   0  0 0     0  0  0   0        0     0      O   O  0   0  0  00    0  \n");
+    printf("0000   0 0  0000  0   0  00000    0      0000   OOO    000   0   0    0  \n");
+
+    screenGotoxy(20, 9);
+    printf(" Pressione Enter para começar -->");
+
+    screenUpdate();
+
+    while (1) {
+        int ch = readch();
+        if (ch == '\n' || ch == '\r') { 
+            break;
+        }
+    }
+}
 
 void draw_scoreboard(int score) {
     screenGotoxy(1, 1); 
@@ -127,6 +152,9 @@ int main() {
     int ball_falling = 0;
     int ch;
     int delay = INITIAL_DELAY;
+
+    // Mostra a tela inicial antes do jogo começar
+    tela_inicial();
 
     keyboardInit();
     screenInit(0); 
