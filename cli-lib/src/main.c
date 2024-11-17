@@ -29,8 +29,7 @@ typedef struct {
 void tela_inicial() {
     screenClear();
     screenSetColor(YELLOW, BLACK); 
-
-    
+   
     screenGotoxy(5, 2);
     printf("\n0 0 0   0   0000  0   0  00000  00000    0000   OOO   0   0  0   0  00000\n");
     printf("0   0  0 0  0     0  0   0        0     0      O   O  0   0  00  0    0  \n");
@@ -153,7 +152,6 @@ int main() {
     int ch;
     int delay = INITIAL_DELAY;
 
-    // Mostra a tela inicial antes do jogo começar
     tela_inicial();
 
     keyboardInit();
