@@ -106,7 +106,7 @@ void display_leaderboard() {
 }
 
 void draw_court(Bola bola, Cesta cesta, int max_y) {
-    screenSetColor(WHITE, BLACK); // Define a cor padrão para o fundo
+    screenSetColor(WHITE, BLACK); 
     for (int y = 0; y < max_y; y++) {
         for (int x = 0; x < 40; x++) {
             screenGotoxy(x + 1, y + 6);
@@ -139,7 +139,7 @@ void draw_court(Bola bola, Cesta cesta, int max_y) {
             }
         }
     }
-    screenSetColor(WHITE, BLACK); // Reseta a cor no final
+    screenSetColor(WHITE, BLACK); 
 }
 
 int main() {
